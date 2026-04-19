@@ -1,0 +1,52 @@
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { TouchableOpacity } from 'react-native';
+
+export default function AdminLayout() {
+  const { logout } = useAuth();
+  
+  return (
+    <Tabs
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#0f172a',
+          shadowColor: 'transparent',
+          borderBottomWidth: 0,
+        },
+        headerTintColor: '#fff',
+        tabBarStyle: {
+          backgroundColor: '#1e293b',
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+        tabBarActiveTintColor: '#38bdf8',
+        tabBarInactiveTintColor: '#64748b',
+        headerRight: () => (
+          <TouchableOpacity onPress={logout} className="mr-4 p-2">
+            <Ionicons name="log-out-outline" size={24} color="#f87171" />
+          </TouchableOpacity>
+        ),
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Panel Control',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="analytics-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: 'Escanear',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="scan-outline" color={color} size={size} />
+          ),
+        }}
+      />
+    </Tabs>
+  );
+}
