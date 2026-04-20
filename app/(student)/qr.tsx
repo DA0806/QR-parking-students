@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Switch } from 'react-native';
+import { View, Text } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { useAuth } from '../../context/AuthContext';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useUser } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
+import { API_URL } from '../../config/api';
 
 type Vehicle = {
   plate: string;
@@ -12,18 +12,19 @@ type Vehicle = {
 };
 
 export default function StudentQRScreen() {
-  const { user } = useAuth();
-  const db = useSQLiteContext();
+  const { user } = useUser();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   const fetchVehicles = async () => {
     if (!user) return;
     try {
-      const result = await db.getAllAsync<Vehicle>('SELECT * FROM Vehicles WHERE owner_id = ?', [user.id]);
-      setVehicles(result);
-      if (result.length > 0 && !selectedVehicle) {
-        setSelectedVehicle(result[0]);
+      const response = await fetch(`${API_URL}/vehicles/${user.id}`);
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      setVehicles(data);
+      if (data.length > 0 && !selectedVehicle) {
+        setSelectedVehicle(data[0]);
       }
     } catch (e) {
       console.error(e);
@@ -58,7 +59,7 @@ export default function StudentQRScreen() {
           />
         </View>
 
-        <Text className="text-lg font-bold text-slate-700">{user?.name}</Text>
+        <Text className="text-lg font-bold text-slate-700">{user?.fullName || user?.primaryEmailAddress?.emailAddress}</Text>
         <Text className="text-slate-500 mb-6 text-center">Estudiante</Text>
 
         {vehicles.length > 0 && (

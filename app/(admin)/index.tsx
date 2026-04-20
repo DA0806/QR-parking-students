@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../../config/api';
 
 type EventLog = {
   id: number;
@@ -22,26 +22,19 @@ export default function AdminDashboardScreen() {
   const [logs, setLogs] = useState<EventLog[]>([]);
   const [stats, setStats] = useState<Stat[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const db = useSQLiteContext();
 
   const fetchData = async () => {
     try {
       // Fetch recent logs
-      const logsResult = await db.getAllAsync<EventLog>(`
-        SELECT a.id, a.vehicle_plate, z.name as zone_name, a.event_type, a.timestamp 
-        FROM AccessEvents a
-        JOIN Zones z ON a.zone_id = z.id
-        ORDER BY a.timestamp DESC
-        LIMIT 20
-      `);
-      setLogs(logsResult);
+      const logsResponse = await fetch(`${API_URL}/events/recent`);
+      if (logsResponse.ok) setLogs(await logsResponse.json());
 
       // Fetch overall stats
-      const statsResult = await db.getAllAsync<Stat>(`
-        SELECT name, total_capacity as total, current_occupancy as occupancy
-        FROM Zones
-      `);
-      setStats(statsResult);
+      const statsResponse = await fetch(`${API_URL}/zones`);
+      if (statsResponse.ok) {
+        const zones = await statsResponse.json();
+        setStats(zones.map((z: any) => ({ name: z.name, total: z.total_capacity, occupancy: z.current_occupancy })));
+      }
     } catch (e) {
       console.error(e);
     }

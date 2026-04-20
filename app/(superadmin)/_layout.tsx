@@ -5,7 +5,7 @@ import { TouchableOpacity } from 'react-native';
 import React, { useState } from 'react';
 import LogoutModal from '../../components/LogoutModal';
 
-export default function StudentLayout() {
+export default function SuperAdminLayout() {
   const { signOut } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   
@@ -21,18 +21,17 @@ export default function StudentLayout() {
     <Tabs
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#0f172a', // slate-900
+          backgroundColor: '#0f172a',
           shadowColor: 'transparent',
           borderBottomWidth: 0,
         },
         headerTintColor: '#fff',
         tabBarStyle: {
-          backgroundColor: '#1e293b', // slate-800
+          backgroundColor: '#1e293b',
           borderTopWidth: 0,
-          elevation: 0,
         },
-        tabBarActiveTintColor: '#38bdf8', // sky-400
-        tabBarInactiveTintColor: '#64748b', // slate-500
+        tabBarActiveTintColor: '#38bdf8',
+        tabBarInactiveTintColor: '#64748b',
         headerRight: () => (
           <TouchableOpacity onPress={handleLogoutClick} className="mr-4 p-2">
             <Ionicons name="log-out-outline" size={24} color="#f87171" />
@@ -41,29 +40,20 @@ export default function StudentLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="zones"
         options={{
           title: 'Zonas',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car-outline" color={color} size={size} />
+            <Ionicons name="map-outline" color={color} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="qr"
+        name="users"
         options={{
-          title: 'Código QR',
+          title: 'Usuarios',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="qr-code-outline" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="vehicles"
-        options={{
-          title: 'Vehículos',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car-sport-outline" color={color} size={size} />
+            <Ionicons name="people-outline" color={color} size={size} />
           ),
         }}
       />

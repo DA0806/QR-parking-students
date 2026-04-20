@@ -1,12 +1,23 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@clerk/clerk-expo';
 import { TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import LogoutModal from '../../components/LogoutModal';
 
 export default function AdminLayout() {
-  const { logout } = useAuth();
+  const { signOut } = useAuth();
+  const [modalVisible, setModalVisible] = useState(false);
+  
+  const handleLogoutClick = () => setModalVisible(true);
+  
+  const confirmLogout = () => {
+    setModalVisible(false);
+    signOut();
+  };
   
   return (
+    <>
     <Tabs
       screenOptions={{
         headerStyle: {
@@ -23,7 +34,7 @@ export default function AdminLayout() {
         tabBarActiveTintColor: '#38bdf8',
         tabBarInactiveTintColor: '#64748b',
         headerRight: () => (
-          <TouchableOpacity onPress={logout} className="mr-4 p-2">
+          <TouchableOpacity onPress={handleLogoutClick} className="mr-4 p-2">
             <Ionicons name="log-out-outline" size={24} color="#f87171" />
           </TouchableOpacity>
         ),
@@ -48,5 +59,7 @@ export default function AdminLayout() {
         }}
       />
     </Tabs>
+    <LogoutModal visible={modalVisible} onCancel={() => setModalVisible(false)} onConfirm={confirmLogout} />
+    </>
   );
 }

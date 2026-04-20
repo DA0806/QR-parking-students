@@ -1,51 +1,82 @@
-# Control de Parqueo con QR - Key Alumnos
+# Key Alumnos - Plataforma de Parqueo Inteligente
 
-Una aplicación móvil desarrollada con **React Native (Expo)** y diseñada con un enfoque premium para gestionar de forma inteligente el sistema de parqueos dentro de un campus, optimizando el tiempo y dando visibilidad en tiempo real a los cupos disponibles.
+Una plataforma integral desarrollada con **React Native (Expo)**, **Node.js** y **Clerk** diseñada con un enfoque premium para gestionar de forma inteligente el sistema de parqueos dentro de un campus, optimizando el tiempo y dando visibilidad en tiempo real a los cupos disponibles.
 
-## 🚀 Características Principales
+## 🚀 Arquitectura Cliente-Servidor (Fase 2)
 
-Esta aplicación divide su funcionalidad según el rol del usuario (Estudiante vs. Seguridad/Administrador):
+La aplicación ha mutado de un prototipo local a una arquitectura robusta Centralizada:
+1. **Frontend (App Móvil):** Construida en Expo React Native usando Expo Router y NativeWind.
+2. **Backend (API REST):** Servidor local desarrollado en Node.js + Express que almacena todas las transacciones, aforos y usuarios en **SQLite**.
+3. **Autenticación (Nube):** Sistema de Seguridad delegada a **Clerk** con soporte para Single Sign-On (SSO) de Microsoft e inicio clásico por correo electrónico.
 
-**1. Módulo Estudiante:**
-* **Panel en vivo:** Visualiza la ocupación y aforo disponible de todas las zonas de parqueo mediante barras de progreso y diseño dinámico.
-* **Smart QR Pass:** Generación inmediata de un gafete de entrada (QR dinámico) que contiene el id del usuario y las placas de sus vehículos registrados, validado directamente contra el sistema.
+## 👥 Roles del Sistema
 
-**2. Módulo Seguridad (Administrador):**
-* **Cámara Escáner Nativa:** Uso de la tecnología de dispositivo (`expo-camera`) para enfocar el pase de los alumnos a su llegada o salida.
-* **Lógica Autónoma:** El sistema capta automáticamente el flujo leyendo la `plate` del auto, revisando el aforo; si hay espacio da ingreso (ENTRY), de lo contrario alerta de un parqueo lleno. 
-* **Bitácora Registral:** Un historial al momento (dashboard) registrando placas, timestamp y si está entrando o saliendo, recalculando estadísticamente los cupos de las zonas de la universidad.
+Esta aplicación divide su funcionalidad estrictamente en 3 capas de permisos controladas por el servidor:
+
+**1. Módulo Estudiante (`student`):**
+* **Panel en vivo:** Visualiza la ocupación y aforo disponible de todas las zonas de parqueo (Actualizado por API).
+* **Smart QR Pass / Gafete:** Generación inmediata de un gafete de entrada (QR dinámico) ligado a su perfil de Clerk.
+* **Gestión de Vehículos:** Capacidad de añadir y eliminar placas y modelos de auto a su flotilla personal.
+
+**2. Módulo Guardia / Seguridad (`admin`):**
+* **Selector de Zona (Parqueo):** Permite al guardia establecer en qué punto de entrada se encuentra situado físicamente.
+* **Cámara Escáner Nativa:** Uso de la cámara del dispositivo para enfocar los pases estudiantiles.
+* **Lógica Automática:** El escáner se comunica con el servidor para autorizar la placa y sumar o restar aforos dinámicamente si el vehículo está entrando o saliendo de la zona. 
+
+**3. Módulo de Gerencia (`superadmin`):**
+* **Administración de Zonas:** Creación y Destrucción de parqueos y modificación de aforos totales.
+* **Panel de Usuarios:** Control en tiempo real de todos los usuarios registrados a través de Clerk, para promover estudiantes al rol de guardias de seguridad o revocarles permisos.
 
 ## 🛠️ Stack Tecnológico Utilizado
 
-* **Framework Base:** [React Native](https://reactnative.dev/) gestionado a través del ecosistema de [Expo](https://expo.dev/) (SDK 51 o superior).
-* **Router:** Novedoso sistema basado en la web `Expo Router` (navegador por carpetas).
-* **Styling V4 Premium:** Usamos [NativeWind](https://www.nativewind.dev/) que es la adaptación directa del compilador de **Tailwind CSS v3/v4** para interfaces móviles impactantes. Paleta de colores `slate` con accent en `sky` (Glassmorphism & Neon Shadows).
-* **Mock Local Backend:** SQLite local en el propio dispositivo (`expo-sqlite`) usando el nuevo API asíncrono para gestionar tablas y validaciones transaccionales rápidas (Autónomo).
-* **Soporte Multimedia:** `react-native-qrcode-svg` y `expo-camera` para la iteración óptica de códigos.
+* **Frontend:** React Native (Expo SDK 54+), Expo Router (Navegación tipo File-system), UI NativeWind v4 (TailwindCSS).
+* **Backend:** Node.js, Express, SQLite3 (Base de datos transaccional central).
+* **Seguridad:** Clerk-Expo, SSO de Microsoft, React Native SecureStore.
+* **APIs de Hardware:** `expo-camera`, `expo-linking`, `expo-crypto`.
 
-## ⚙️ ¿Cómo probarlo?
+## ⚙️ ¿Cómo levantar la Plataforma para probarla?
 
-¡La app viene con un registro de usuarios de prueba pre-cargado! 
-No necesitas servidor en la nube porque SQLite simulará la base de datos de manera impecable y local en tu primera recarga rápida.
+> **Nota Crítica:** Al ser ahora una plataforma Cliente-Servidor, se requieren levantar DOS consolas diferentes, una para el backend y otra para el frontend.
 
-### Pasos de Instalación
+### 1. Iniciar el Backend (Base de Datos / API)
+1. Abre tu primera terminal en la carpeta principal.
+2. Ingresa a la carpeta del backend: `cd backend`
+3. Instala los paquetes: `npm install`
+4. Enciende el servidor:
+```bash
+node index.js
+```
+*(Mantén esta terminal minimizada escuchando en el puerto 3000)*
 
-1. Clona o descarga el repositorio y abre la terminal en la raíz (`QR key`).
-2. Instala todos los paquetes requeridos por el ecosistema local:
-   ```bash
-   npm install
-   ```
-3. *(Opcional)* Si te da conflictos en caché en desarrollos previos, puedes iniciar con la bandera force clear:
-   ```bash
-   npm start -- -c
-   ```
-4. Podrás usar la app en simulador web escaneándolo con **Expo Go** mediante tu dispositivo personal, o abrir "Emulador de Android/iOS" usando comandos recomendados dentro de la terminal (`w` para Web, `a` para Android, `i` para un dispositivo de iOS).
+### 2. Configurar la Red Front-End
+Si pruebas la app en un emulador Android, se usará la IP `10.0.2.2`. Sin embargo, si deseas probar el escáner de QR directamente desde **tu celular físico**, debes:
+1. Ir al archivo `config/api.ts`
+2. Cambiar la constante `HOST` a la IPv4 de tu computadora (Ej. `192.168.0.x`).
+3. Crear un archivo `.env` en la raíz del proyecto.
+4. Agregar el parámetro de autenticación: `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_TU_LLAVE_DE_CLERK`
+
+### 3. Iniciar la App Móvil (Front-End)
+1. Abre una segunda terminal en la raíz de tu proyecto (`QR key`).
+2. Instala los paquetes:
+```bash
+npm install
+```
+3. Levanta Metro Bundler limpiando cachés previas:
+```bash
+npm start -- -c
+```
+4. Escanea el código con Expo Go o arranca la Web/Emulador.
 
 ---
 
-### 🔑 Credenciales para Evaluar
+### 🔑 Gestión Inicial de Roles (Testing)
 
-La base de datos expone dos cuentas de mock en la pantalla de inicio:
+Dado que Clerk maneja la seguridad, cualquier cuenta nueva creada (Correo o Microsoft) ingresará como `student` por defecto. 
 
-*   👤 **Estudiante:** Ingresa el correo `diego@student.com` y se mostrarán tus cupos más emisión de tu placa asignada ABC-123.
-*   🛡️ **Administrador / Seguridad:** Ingresa el correo `admin@keyalumnos.com` para abrir el Dashboard. Si escaneas el QR del estudiante o en la misma app, irá actualizando el contador.
+**Para testear el panel de `superadmin` por primera vez:**
+1. Crea tu cuenta en la app y accede al panel de estudiante.
+2. Abre tu explorador de Bases de Datos favorito (Ej. SQLite Browser).
+3. Entra a `backend/keyalumnos.db`.
+4. En la tabla `Users`, localiza tu usuario y cambia la columna `role` a `superadmin`.
+5. Guarda la DB, y refresca tu app móvil (Reiniciar Metro Bundle).
+A partir de ahí, obtendrás el control absoluto y podrás convertir a otras cuentas en Guardias directamente desde la app.

@@ -44,7 +44,8 @@
         {
           "cameraPermission": "Permitir a Key Alumnos usar la cámara para escanear accesos QR."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from 'expo-router';
+import { API_URL } from '../../config/api';
 
 type Zone = {
   id: number;
@@ -13,12 +13,13 @@ type Zone = {
 export default function StudentZonesScreen() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const db = useSQLiteContext();
 
   const fetchZones = async () => {
     try {
-      const result = await db.getAllAsync<Zone>('SELECT * FROM Zones');
-      setZones(result);
+      const response = await fetch(`${API_URL}/zones`);
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      setZones(data);
     } catch (e) {
       console.error(e);
     }

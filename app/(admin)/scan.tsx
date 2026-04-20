@@ -1,16 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Button, Alert, TouchableOpacity } from 'react-native';
-import { CameraView, Camera } from 'expo-camera';
-import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from 'expo-router';
+import { Camera, CameraView } from 'expo-camera';
+import { useFocusEffect, useNavigation } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import { API_URL } from '../../config/api';
 
 export default function AdminScanScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
-  const [selectedZone, setSelectedZone] = useState<number>(1); // Assuming 1 is Parqueo Norte
-  const db = useSQLiteContext();
+  const [selectedZone, setSelectedZone] = useState<number>(1);
+  const [zones, setZones] = useState<{ id: number, name: string }[]>([]);
   const navigation = useNavigation();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetch(`${API_URL}/zones`)
+        .then(res => res.json())
+        .then(data => {
+          setZones(data);
+          if (data.length > 0) setSelectedZone(data[0].id);
+        })
+        .catch(console.error);
+    }, [])
+  );
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -30,43 +42,33 @@ export default function AdminScanScreen() {
         return;
       }
 
-      // Check current zone capacity
-      const zone = await db.getFirstAsync<{ current_occupancy: number, total_capacity: number }>(
-        'SELECT current_occupancy, total_capacity FROM Zones WHERE id = ?',
-        [selectedZone]
-      );
+      const res = await fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicle_plate: qrData.plate,
+          zone_id: selectedZone,
+          // The backend now determines ENTRY or EXIT automatically using /api/events automatically?
+          // Actually, let's fetch last event to determine isEntry here, or send it to backend
+        })
+      });
 
-      if (!zone) {
-        Alert.alert('Error', 'Zona inválida.');
-        return;
-      }
-
-      // Allow choose entry or exit? Let's just ask the user or infer based on logic.
-      // Logic: if already inside, it's an exit. We check the last event.
-      const lastEvent = await db.getFirstAsync<{ event_type: string }>(
-        'SELECT event_type FROM AccessEvents WHERE vehicle_plate = ? ORDER BY timestamp DESC LIMIT 1',
-        [qrData.plate]
-      );
-
+      // Quick fix: we'll call last event first
+      const lastEventRes = await fetch(`${API_URL}/events/last/${qrData.plate}`);
+      const lastEvent = lastEventRes.ok ? await lastEventRes.json() : null;
       const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
 
-      if (isEntry && zone.current_occupancy >= zone.total_capacity) {
-        Alert.alert('Acceso Denegado', 'El parqueo está lleno.');
+      const finalRes = await fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicle_plate: qrData.plate, zone_id: selectedZone, isEntry })
+      });
+
+      if (!finalRes.ok) {
+        const errorData = await finalRes.json();
+        Alert.alert('Acceso Denegado', errorData.error || 'Error al autorizar.');
         return;
       }
-
-      // Register event
-      await db.runAsync(
-        'INSERT INTO AccessEvents (vehicle_plate, zone_id, event_type) VALUES (?, ?, ?)',
-        [qrData.plate, selectedZone, isEntry ? 'ENTRY' : 'EXIT']
-      );
-
-      // Update occupancy
-      const delta = isEntry ? 1 : -1;
-      await db.runAsync(
-        'UPDATE Zones SET current_occupancy = current_occupancy + ? WHERE id = ?',
-        [delta, selectedZone]
-      );
 
       Alert.alert(
         isEntry ? 'Ingreso Autorizado' : 'Salida Registrada',
@@ -97,7 +99,25 @@ export default function AdminScanScreen() {
     <View className="flex-1 bg-slate-900">
       <View className="p-6 pb-4">
         <Text className="text-2xl font-bold text-white">Escáner de Acceso</Text>
-        <Text className="text-slate-400 mt-1">Apunta la cámara al QR del estudiante.</Text>
+        <Text className="text-slate-400 mt-1 mb-4">Apunta la cámara al QR del estudiante.</Text>
+
+        {zones.length > 0 ? (
+          <View className="bg-slate-800 rounded-xl p-3 flex-row flex-wrap justify-between">
+            {zones.map(z => (
+              <TouchableOpacity
+                key={z.id}
+                onPress={() => setSelectedZone(z.id)}
+                className={`px-3 py-2 rounded-lg mb-2 ${selectedZone === z.id ? 'bg-sky-500' : 'bg-slate-700'}`}
+              >
+                <Text className={`${selectedZone === z.id ? 'text-white font-bold' : 'text-slate-300'}`}>
+                  {z.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <ActivityIndicator color="#38bdf8" />
+        )}
       </View>
 
       <View className="flex-1 relative rounded-t-3xl overflow-hidden mt-2 border-t-2 border-slate-800">
