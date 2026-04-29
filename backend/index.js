@@ -26,6 +26,7 @@ const scanLimiter = rateLimit({
 });
 
 // --- QR API ---
+// Obsolete: Now handled 100% offline via Hmac TOTP in the client. Kept only as a stub just in case.
 app.post('/api/qr/generate', qrLimiter, requireAuth(), (req, res) => {
   const { userId, plate, type } = req.body;
 
@@ -88,6 +89,29 @@ app.put('/api/users/:clerk_id/role', (req, res) => {
   });
 });
 
+// --- SECRET SYNC API (For offline TOTP) ---
+// Called when student app requests their offline secret key
+app.get('/api/users/sync-secret', requireAuth(), (req, res) => {
+  const clerk_id = req.auth.userId;
+
+  db.get('SELECT qr_secret FROM Users WHERE clerk_id = ?', [clerk_id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (row && row.qr_secret) {
+      return res.json({ secret: row.qr_secret });
+    } else {
+      // Generate a new 32-character random hex string
+      const crypto = require('crypto');
+      const newSecret = crypto.randomBytes(16).toString('hex');
+      
+      db.run('UPDATE Users SET qr_secret = ? WHERE clerk_id = ?', [newSecret, clerk_id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ secret: newSecret });
+      });
+    }
+  });
+});
+
 // --- VEHICLES API ---
 app.get('/api/vehicles/:clerk_id', (req, res) => {
   db.all('SELECT * FROM Vehicles WHERE owner_clerk_id = ?', [req.params.clerk_id], (err, rows) => {
@@ -144,51 +168,85 @@ app.delete('/api/zones/:id', (req, res) => {
 });
 
 // --- EVENTS API (Scanner) ---
-app.post('/api/events/scan', (req, res) => {
+app.post('/api/events/scan', scanLimiter, requireAuth(), (req, res) => {
     const { token, zone_id } = req.body;
     
     if (!token || !zone_id) return res.status(400).json({ error: 'Faltan datos del escaneo' });
 
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).json({ error: 'QR Token inválido o ha expirado.' });
-        }
+    // Parse the payload and the TOTP from the token. We expect token to be JSON like { payload, signature }
+    let parsedToken;
+    try {
+      parsedToken = JSON.parse(token);
+    } catch {
+      return res.status(400).json({ error: 'Formato de token inválido' });
+    }
 
-        const vehicle_plate = decoded.plate || 'PEATON';
-        const isPedestrian = !decoded.plate;
+    const { payload, signature } = parsedToken;
+    if (!payload || !signature || !payload.userId) {
+      return res.status(400).json({ error: 'Token incompleto' });
+    }
 
-        // Obtain last event to determine isEntry status
-        db.get('SELECT event_type FROM AccessEvents WHERE vehicle_plate = ? ORDER BY timestamp DESC LIMIT 1', [vehicle_plate], (err, lastEvent) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
+    // Lookup user's secret
+    db.get('SELECT qr_secret FROM Users WHERE clerk_id = ?', [payload.userId], (err, userRow) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!userRow || !userRow.qr_secret) return res.status(401).json({ error: 'Usuario no tiene llave secreta configurada' });
 
-            db.get('SELECT current_occupancy, total_capacity FROM Zones WHERE id = ?', [zone_id], (err, zone) => {
-                if (err) return res.status(500).json({ error: err.message });
-                if (!zone) return res.status(404).json({ error: 'Zona no encontrada' });
+      // Verifying offline TOTP
+      // 1. Ensure token isn't expired (timestamp is within 5 minutes of now)
+      const now = Math.floor(Date.now() / 1000);
+      const tokenTime = payload.timestamp;
+      
+      // Token older than 5 minutes or generated in the future
+      if (now - tokenTime > 300 || tokenTime > now + 60) {
+        return res.status(401).json({ error: 'Token expirado' });
+      }
 
-                if (isEntry && !isPedestrian && zone.current_occupancy >= zone.total_capacity) {
-                    return res.status(400).json({ error: 'Zona llena' });
-                }
+      // 2. Re-hash payload with secret to verify integrity
+      const crypto = require('crypto');
+      const expectedSignature = crypto
+        .createHmac('sha256', userRow.qr_secret)
+        .update(JSON.stringify(payload))
+        .digest('hex');
 
-                const eventType = isEntry ? 'ENTRY' : 'EXIT';
-                const delta = (isEntry && !isPedestrian) ? 1 : (!isEntry && !isPedestrian) ? -1 : 0;
+      if (signature !== expectedSignature) {
+        return res.status(401).json({ error: 'Firma de codigo QR inválida' });
+      }
 
-                db.serialize(() => {
-                    db.run('BEGIN TRANSACTION');
-                    db.run('INSERT INTO AccessEvents (vehicle_plate, zone_id, event_type) VALUES (?, ?, ?)', 
-                           [vehicle_plate, zone_id, eventType]);
-                    if (delta !== 0) {
-                        db.run('UPDATE Zones SET current_occupancy = MAX(0, current_occupancy + ?) WHERE id = ?', 
-                               [delta, zone_id]);
-                    }
-                    db.run('COMMIT', (err) => {
-                        if (err) return res.status(500).json({ error: err.message });
-                        res.json({ success: true, eventType, vehicle_plate, isEntry });
-                    });
-                });
-            });
-        });
+      const vehicle_plate = payload.plate || 'PEATON';
+      const isPedestrian = !payload.plate;
+
+      // Obtain last event to determine isEntry status
+      db.get('SELECT event_type FROM AccessEvents WHERE vehicle_plate = ? ORDER BY timestamp DESC LIMIT 1', [vehicle_plate], (err, lastEvent) => {
+          if (err) return res.status(500).json({ error: err.message });
+          
+          const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
+
+          db.get('SELECT current_occupancy, total_capacity FROM Zones WHERE id = ?', [zone_id], (err, zone) => {
+              if (err) return res.status(500).json({ error: err.message });
+              if (!zone) return res.status(404).json({ error: 'Zona no encontrada' });
+
+              if (isEntry && !isPedestrian && zone.current_occupancy >= zone.total_capacity) {
+                  return res.status(400).json({ error: 'Zona llena' });
+              }
+
+              const eventType = isEntry ? 'ENTRY' : 'EXIT';
+              const delta = (isEntry && !isPedestrian) ? 1 : (!isEntry && !isPedestrian) ? -1 : 0;
+
+              db.serialize(() => {
+                  db.run('BEGIN TRANSACTION');
+                  db.run('INSERT INTO AccessEvents (vehicle_plate, zone_id, event_type) VALUES (?, ?, ?)', 
+                         [vehicle_plate, zone_id, eventType]);
+                  if (delta !== 0) {
+                      db.run('UPDATE Zones SET current_occupancy = MAX(0, current_occupancy + ?) WHERE id = ?', 
+                             [delta, zone_id]);
+                  }
+                  db.run('COMMIT', (err) => {
+                      if (err) return res.status(500).json({ error: err.message });
+                      res.json({ success: true, eventType, vehicle_plate, isEntry });
+                  });
+              });
+          });
+      });
     });
 });
 

@@ -4,6 +4,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { useUser, useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
 import * as Brightness from 'expo-brightness';
+import * as SecureStore from 'expo-secure-store';
+import CryptoJS from 'crypto-js';
 import { API_URL } from '../../config/api';
 
 type Vehicle = {
@@ -38,26 +40,49 @@ export default function StudentQRScreen() {
   const fetchQrToken = async () => {
     if (!user) return;
     try {
-      const payload = selectedVehicle
-        ? { userId: user.id, plate: selectedVehicle.plate }
-        : { userId: user.id, type: 'pedestrian' };
+      // 1. Check if we have the secret offline
+      let secretKey = await SecureStore.getItemAsync('qr_secret_key');
+      
+      // 2. If no secret, ask backend for it (Requires internet ONCE)
+      if (!secretKey) {
+        const token = await getToken();
+        console.log('Fetching initial secret from backend...');
+        const response = await fetch(`${API_URL}/users/sync-secret`, {
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+          },
+        });
+        const data = await response.json();
+        
+        if (data.secret) {
+          secretKey = data.secret;
+          await SecureStore.setItemAsync('qr_secret_key', secretKey); // Use standard type explicitly for setItemAsync to appease TS
+        } else {
+          throw new Error('Failed to obtain secret from server');
+        }
+      }
 
-      const token = await getToken();
+      // 3. Generate Token OFFLINE
+      if (secretKey) {
+        const currentTimeInSeconds = Math.floor(Date.now() / 1000);
+        
+        const payloadObj = selectedVehicle
+          ? { userId: user.id, plate: selectedVehicle.plate, timestamp: currentTimeInSeconds }
+          : { userId: user.id, type: 'pedestrian', timestamp: currentTimeInSeconds };
+          
+        // Create an HMAC using CryptoJS
+        const signature = CryptoJS.HmacSHA256(JSON.stringify(payloadObj), secretKey).toString(CryptoJS.enc.Hex);
 
-      const response = await fetch(`${API_URL}/qr/generate`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (data.token) {
-        setQrToken(data.token);
+        const secureTokenPayload = {
+          payload: payloadObj,
+          signature: signature
+        };
+
+        setQrToken(JSON.stringify(secureTokenPayload));
       }
     } catch (e) {
-      console.error('Error fetching QR token', e);
+      console.error('Error generating offline QR token', e);
     }
   };
 

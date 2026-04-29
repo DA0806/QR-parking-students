@@ -15,9 +15,15 @@ db.serialize(() => {
       clerk_id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
-      role TEXT DEFAULT 'student' -- student, admin, superadmin
+      role TEXT DEFAULT 'student', -- student, admin, superadmin
+      qr_secret TEXT
     );
   `);
+
+  // Ensure older databases get updated with qr_secret column
+  db.run("ALTER TABLE Users ADD COLUMN qr_secret TEXT;", (err) => {
+    // Expected to fail if column already exists. Ignore.
+  });
 
   // Vehicles Table
   db.run(`
