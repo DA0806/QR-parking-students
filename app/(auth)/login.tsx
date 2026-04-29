@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useSignIn, useSignUp, useOAuth } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp, useOAuth, useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
 import { useWarmUpBrowser } from '../../hooks/useWarmUpBrowser';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -11,6 +12,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   useWarmUpBrowser();
+  const router = useRouter();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   
   const { isLoaded: isSignInLoaded, signIn, setActive } = useSignIn();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
@@ -25,7 +28,17 @@ export default function LoginScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
 
+  React.useEffect(() => {
+    if (isAuthLoaded && isSignedIn) {
+      router.replace('/');
+    }
+  }, [isAuthLoaded, isSignedIn, router]);
+
   const onSignInPress = async () => {
+    if (isSignedIn) {
+      router.replace('/');
+      return;
+    }
     if (!isSignInLoaded) return;
     setIsLoading(true);
     try {
@@ -42,6 +55,10 @@ export default function LoginScreen() {
   };
 
   const onSignUpPress = async () => {
+    if (isSignedIn) {
+      router.replace('/');
+      return;
+    }
     if (!isSignUpLoaded) return;
     setIsLoading(true);
     try {
@@ -61,6 +78,10 @@ export default function LoginScreen() {
   };
 
   const onPressVerify = async () => {
+    if (isSignedIn) {
+      router.replace('/');
+      return;
+    }
     if (!isSignUpLoaded) return;
     setIsLoading(true);
     try {
@@ -76,6 +97,10 @@ export default function LoginScreen() {
   };
 
   const onMicrosoftPress = async () => {
+    if (isSignedIn) {
+      router.replace('/');
+      return;
+    }
     setIsLoading(true);
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startMicrosoftAuth({

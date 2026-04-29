@@ -3,28 +3,32 @@ import Constants from 'expo-constants';
 
 const EXPO_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+const normalizeApiUrl = (url: string) => url.replace(/\/$/, '');
+
+const getExpoHost = () => {
+	const hostUri =
+		Constants.expoConfig?.hostUri ||
+		(Constants as any)?.expoGoConfig?.debuggerHost ||
+		(Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost ||
+		(Constants as any)?.manifest?.debuggerHost;
+
+	return hostUri?.split(':')[0];
+};
+
 const getHost = () => {
 	if (EXPO_API_URL) {
-		return EXPO_API_URL;
+		return normalizeApiUrl(EXPO_API_URL);
 	}
 
 	if (Platform.OS === 'web') {
 		return 'http://localhost:3000/api';
 	}
 
-	// Use whatever Expo reports as the dev server host on native.
-	const debuggerHost =
-		Constants.expoConfig?.hostUri ||
-		(Constants as any)?.expoGoConfig?.debuggerHost ||
-		(Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost ||
-		(Constants as any)?.manifest?.debuggerHost;
-	const host = debuggerHost?.split(':')[0];
-
-	if (host) {
-		return `http://${host}:3000/api`;
+	const expoHost = getExpoHost();
+	if (expoHost) {
+		return `http://${expoHost}:3000/api`;
 	}
 
-	// Last-resort fallback for Android emulator.
 	if (Platform.OS === 'android') {
 		return 'http://10.0.2.2:3000/api';
 	}

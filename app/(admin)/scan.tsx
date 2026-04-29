@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Camera, CameraView } from 'expo-camera';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { API_URL } from '../../config/api';
 
@@ -11,6 +11,32 @@ export default function AdminScanScreen() {
   const [selectedZone, setSelectedZone] = useState<number>(1);
   const [zones, setZones] = useState<{ id: number, name: string }[]>([]);
   const navigation = useNavigation();
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isProcessingRef = useRef(false);
+
+  const startScanCooldown = () => {
+    isProcessingRef.current = true;
+    setScanned(true);
+
+    if (cooldownTimerRef.current) {
+      clearTimeout(cooldownTimerRef.current);
+    }
+
+    // Keep it locked even after the modal to prevent quick re-scans if the device is still pointing at it
+    cooldownTimerRef.current = setTimeout(() => {
+      setScanned(false);
+      isProcessingRef.current = false;
+      cooldownTimerRef.current = null;
+    }, 4000);
+  };
+
+  const resetScanner = () => {
+    // Keep a bare minimum lock to avoid instant re-reads after pressing Aceptar
+    setTimeout(() => {
+      setScanned(false);
+      isProcessingRef.current = false;
+    }, 1500);
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -34,7 +60,9 @@ export default function AdminScanScreen() {
   }, []);
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    setScanned(true);
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    startScanCooldown();
     try {
       const qrData = JSON.parse(data);
       if (!qrData.plate) {
@@ -42,18 +70,6 @@ export default function AdminScanScreen() {
         return;
       }
 
-      const res = await fetch(`${API_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicle_plate: qrData.plate,
-          zone_id: selectedZone,
-          // The backend now determines ENTRY or EXIT automatically using /api/events automatically?
-          // Actually, let's fetch last event to determine isEntry here, or send it to backend
-        })
-      });
-
-      // Quick fix: we'll call last event first
       const lastEventRes = await fetch(`${API_URL}/events/last/${qrData.plate}`);
       const lastEvent = lastEventRes.ok ? await lastEventRes.json() : null;
       const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
@@ -70,15 +86,20 @@ export default function AdminScanScreen() {
         return;
       }
 
+      await fetch(`${API_URL}/zones`)
+        .then(res => res.json())
+        .then(setZones)
+        .catch(console.error);
+
       Alert.alert(
         isEntry ? 'Ingreso Autorizado' : 'Salida Registrada',
         `Vehículo ${qrData.plate}\nvía ${isEntry ? 'Entrada' : 'Salida'} exitosa.`,
-        [{ text: 'Aceptar', onPress: () => setScanned(false) }]
+        [{ text: 'Aceptar', onPress: resetScanner }]
       );
     } catch (e: any) {
       console.log('Error de Escaneo:', e?.message || e);
       Alert.alert('Error de Escaneo', 'Código QR no reconocido de Key Alumnos.', [
-        { text: 'Aceptar', onPress: () => setScanned(false) }
+        { text: 'Aceptar', onPress: resetScanner }
       ]);
     }
   };
@@ -137,7 +158,7 @@ export default function AdminScanScreen() {
         {scanned && (
           <View className="absolute bottom-10 left-0 right-0 items-center">
             <TouchableOpacity
-              onPress={() => setScanned(false)}
+              onPress={resetScanner}
               className="bg-sky-500 px-8 py-4 rounded-full shadow-lg shadow-sky-500/50 flex-row items-center"
             >
               <Ionicons name="scan-outline" size={24} color="#fff" className="mr-2" />
