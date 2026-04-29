@@ -1,6 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const { requireAuth } = require('@clerk/express');
 const db = require('./database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'qr_parking_super_secret_5m_key';
@@ -9,10 +12,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --- RATE LIMITERS ---
+const qrLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 10, // Limit each IP to 10 requests per `window` (here, per minute)
+  message: { error: 'Too many requests for QR generation, please try again later.' }
+});
+
+const scanLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // Limit each IP to 30 requests per minute
+  message: { error: 'Too many scan requests, please wait.' }
+});
+
 // --- QR API ---
-app.post('/api/qr/generate', (req, res) => {
+app.post('/api/qr/generate', qrLimiter, requireAuth(), (req, res) => {
   const { userId, plate, type } = req.body;
+
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+  // Prevent generating QRs for other users
+  if (req.auth.userId !== userId) {
+    return res.status(403).json({ error: 'Unauthorized to generate QR for this user' });
+  }
   
   const payload = { userId, plate, type };
   // Generate a token valid for 5 minutes

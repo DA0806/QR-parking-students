@@ -3,6 +3,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { API_URL } from '../../config/api';
 
 export default function AdminScanScreen() {
@@ -72,7 +73,10 @@ export default function AdminScanScreen() {
 
       if (!finalRes.ok) {
         const errorData = await finalRes.json();
-        Alert.alert('Acceso Denegado', errorData.error || 'Error al autorizar.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Acceso Denegado', errorData.error || 'Error al autorizar.', [
+          { text: 'Aceptar', onPress: resetScanner }
+        ]);
         return;
       }
 
@@ -83,6 +87,7 @@ export default function AdminScanScreen() {
         .then(setZones)
         .catch(console.error);
 
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         scanResult.isEntry ? 'Ingreso Autorizado' : 'Salida Registrada',
         `Vehículo ${scanResult.vehicle_plate}\nvía ${scanResult.isEntry ? 'Entrada' : 'Salida'} exitosa.`,
@@ -90,6 +95,7 @@ export default function AdminScanScreen() {
       );
     } catch (e: any) {
       console.log('Error de Escaneo:', e?.message || e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error de Escaneo', 'Código QR no reconocido o error de red.', [
         { text: 'Aceptar', onPress: resetScanner }
       ]);

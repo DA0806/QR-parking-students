@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
+import * as Brightness from 'expo-brightness';
 import { API_URL } from '../../config/api';
 
 type Vehicle = {
@@ -13,6 +14,7 @@ type Vehicle = {
 
 export default function StudentQRScreen() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [qrToken, setQrToken] = useState<string>('');
@@ -40,9 +42,14 @@ export default function StudentQRScreen() {
         ? { userId: user.id, plate: selectedVehicle.plate }
         : { userId: user.id, type: 'pedestrian' };
 
+      const token = await getToken();
+
       const response = await fetch(`${API_URL}/qr/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
@@ -59,6 +66,26 @@ export default function StudentQRScreen() {
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
+
+  // Maximize brightness to make scanning easier
+  useFocusEffect(
+    useCallback(() => {
+      let previousBrightness: number | null = null;
+      (async () => {
+        const { status } = await Brightness.requestPermissionsAsync();
+        if (status === 'granted') {
+          previousBrightness = await Brightness.getBrightnessAsync();
+          await Brightness.setBrightnessAsync(1); // Set to max brightness
+        }
+      })();
+
+      return () => {
+        if (previousBrightness !== null) {
+          Brightness.setBrightnessAsync(previousBrightness); // Restore on blur
+        }
+      };
+    }, [])
+  );
 
   useFocusEffect(
     useCallback(() => {
