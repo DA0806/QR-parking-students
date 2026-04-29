@@ -12,11 +12,24 @@ const getHost = () => {
 		return 'http://localhost:3000/api';
 	}
 
-	// Expo Go / simulators can usually reach the machine over the packager host.
-	const hostUri = Constants.expoConfig?.hostUri;
-	const host = hostUri?.split(':')[0] ?? 'localhost';
+	// Use whatever Expo reports as the dev server host on native.
+	const debuggerHost =
+		Constants.expoConfig?.hostUri ||
+		(Constants as any)?.expoGoConfig?.debuggerHost ||
+		(Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost ||
+		(Constants as any)?.manifest?.debuggerHost;
+	const host = debuggerHost?.split(':')[0];
 
-	return `http://${host}:3000/api`;
+	if (host) {
+		return `http://${host}:3000/api`;
+	}
+
+	// Last-resort fallback for Android emulator.
+	if (Platform.OS === 'android') {
+		return 'http://10.0.2.2:3000/api';
+	}
+
+	return 'http://localhost:3000/api';
 };
 
 export const API_URL = getHost();
