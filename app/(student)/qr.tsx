@@ -15,6 +15,8 @@ export default function StudentQRScreen() {
   const { user } = useUser();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [qrToken, setQrToken] = useState<string>('');
+  const [timeLeft, setTimeLeft] = useState<number>(270);
 
   const fetchVehicles = async () => {
     if (!user) return;
@@ -31,15 +33,58 @@ export default function StudentQRScreen() {
     }
   };
 
+  const fetchQrToken = async () => {
+    if (!user) return;
+    try {
+      const payload = selectedVehicle
+        ? { userId: user.id, plate: selectedVehicle.plate }
+        : { userId: user.id, type: 'pedestrian' };
+
+      const response = await fetch(`${API_URL}/qr/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (data.token) {
+        setQrToken(data.token);
+      }
+    } catch (e) {
+      console.error('Error fetching QR token', e);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchVehicles();
     }, [user])
   );
 
-  const qrValue = selectedVehicle
-    ? JSON.stringify({ plate: selectedVehicle.plate, userId: user?.id })
-    : JSON.stringify({ userId: user?.id, type: 'pedestrian' });
+  useFocusEffect(
+    useCallback(() => {
+      fetchQrToken();
+      setTimeLeft(270);
+
+      // Refresh token every 4.5 minutes (270 seconds), counting down each second
+      const interval = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            fetchQrToken();
+            return 270;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, [user, selectedVehicle])
+  );
 
   return (
     <View className="flex-1 bg-slate-900 justify-center items-center px-6 relative">
@@ -50,13 +95,27 @@ export default function StudentQRScreen() {
           Tu Pase de Acceso
         </Text>
 
-        <View className="p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-6 shadow-sm">
-          <QRCode
-            value={qrValue}
-            size={200}
-            color="#0f172a"
-            backgroundColor="transparent"
-          />
+        <View className="items-center mb-6">
+          <View className="p-4 bg-slate-50 border border-slate-100 rounded-2xl shadow-sm mb-3">
+            {qrToken ? (
+              <QRCode
+                value={qrToken}
+                size={200}
+                color="#0f172a"
+                backgroundColor="transparent"
+              />
+            ) : (
+               <View style={{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center' }}>
+                 <Text>Generando QR...</Text>
+               </View>
+            )}
+          </View>
+          <View className="bg-sky-100 px-4 py-1 rounded-full flex-row items-center border border-sky-200">
+            <View className="w-2 h-2 rounded-full bg-sky-500 mr-2" />
+            <Text className="text-sky-700 font-semibold text-sm">
+              Expira en {formatTime(timeLeft)}
+            </Text>
+          </View>
         </View>
 
         <Text className="text-lg font-bold text-slate-700">{user?.fullName || user?.primaryEmailAddress?.emailAddress}</Text>

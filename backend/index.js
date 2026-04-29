@@ -1,10 +1,25 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const db = require('./database');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'qr_parking_super_secret_5m_key';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- QR API ---
+app.post('/api/qr/generate', (req, res) => {
+  const { userId, plate, type } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  
+  const payload = { userId, plate, type };
+  // Generate a token valid for 5 minutes
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '5m' });
+  res.json({ token });
+});
+
 
 // --- USERS API ---
 // Called when a user logs in via Clerk. Upserts the user and returns their role.
@@ -107,6 +122,62 @@ app.delete('/api/zones/:id', (req, res) => {
 });
 
 // --- EVENTS API (Scanner) ---
+app.post('/api/events/scan', (req, res) => {
+    const { token, zone_id } = req.body;
+    
+    if (!token || !zone_id) return res.status(400).json({ error: 'Faltan datos del escaneo' });
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ error: 'QR Token inválido o ha expirado.' });
+        }
+
+        const vehicle_plate = decoded.plate || 'PEATON';
+        const isPedestrian = !decoded.plate;
+
+        // Obtain last event to determine isEntry status
+        db.get('SELECT event_type FROM AccessEvents WHERE vehicle_plate = ? ORDER BY timestamp DESC LIMIT 1', [vehicle_plate], (err, lastEvent) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
+
+            db.get('SELECT current_occupancy, total_capacity FROM Zones WHERE id = ?', [zone_id], (err, zone) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!zone) return res.status(404).json({ error: 'Zona no encontrada' });
+
+                if (isEntry && !isPedestrian && zone.current_occupancy >= zone.total_capacity) {
+                    return res.status(400).json({ error: 'Zona llena' });
+                }
+
+                const eventType = isEntry ? 'ENTRY' : 'EXIT';
+                const delta = (isEntry && !isPedestrian) ? 1 : (!isEntry && !isPedestrian) ? -1 : 0;
+
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION');
+                    db.run('INSERT INTO AccessEvents (vehicle_plate, zone_id, event_type) VALUES (?, ?, ?)', 
+                           [vehicle_plate, zone_id, eventType]);
+                    if (delta !== 0) {
+                        db.run('UPDATE Zones SET current_occupancy = MAX(0, current_occupancy + ?) WHERE id = ?', 
+                               [delta, zone_id]);
+                    }
+                    db.run('COMMIT', (err) => {
+                        if (err) return res.status(500).json({ error: err.message });
+                        res.json({ success: true, eventType, vehicle_plate, isEntry });
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.get('/api/events/last/:plate', (req, res) => {
+    db.get('SELECT * FROM AccessEvents WHERE vehicle_plate = ? ORDER BY timestamp DESC LIMIT 1', [req.params.plate], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'No previous events' });
+        res.json(row);
+    });
+});
+
 app.post('/api/events', (req, res) => {
     const { vehicle_plate, zone_id, isEntry } = req.body;
     

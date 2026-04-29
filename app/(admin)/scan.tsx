@@ -64,20 +64,10 @@ export default function AdminScanScreen() {
     isProcessingRef.current = true;
     startScanCooldown();
     try {
-      const qrData = JSON.parse(data);
-      if (!qrData.plate) {
-        Alert.alert('Error', 'QR Inválido o sin vehículo asociado.');
-        return;
-      }
-
-      const lastEventRes = await fetch(`${API_URL}/events/last/${qrData.plate}`);
-      const lastEvent = lastEventRes.ok ? await lastEventRes.json() : null;
-      const isEntry = !lastEvent || lastEvent.event_type === 'EXIT';
-
-      const finalRes = await fetch(`${API_URL}/events`, {
+      const finalRes = await fetch(`${API_URL}/events/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vehicle_plate: qrData.plate, zone_id: selectedZone, isEntry })
+        body: JSON.stringify({ token: data, zone_id: selectedZone })
       });
 
       if (!finalRes.ok) {
@@ -86,19 +76,21 @@ export default function AdminScanScreen() {
         return;
       }
 
+      const scanResult = await finalRes.json();
+
       await fetch(`${API_URL}/zones`)
         .then(res => res.json())
         .then(setZones)
         .catch(console.error);
 
       Alert.alert(
-        isEntry ? 'Ingreso Autorizado' : 'Salida Registrada',
-        `Vehículo ${qrData.plate}\nvía ${isEntry ? 'Entrada' : 'Salida'} exitosa.`,
+        scanResult.isEntry ? 'Ingreso Autorizado' : 'Salida Registrada',
+        `Vehículo ${scanResult.vehicle_plate}\nvía ${scanResult.isEntry ? 'Entrada' : 'Salida'} exitosa.`,
         [{ text: 'Aceptar', onPress: resetScanner }]
       );
     } catch (e: any) {
       console.log('Error de Escaneo:', e?.message || e);
-      Alert.alert('Error de Escaneo', 'Código QR no reconocido de Key Alumnos.', [
+      Alert.alert('Error de Escaneo', 'Código QR no reconocido o error de red.', [
         { text: 'Aceptar', onPress: resetScanner }
       ]);
     }
