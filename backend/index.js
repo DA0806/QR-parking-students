@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { requireAuth } = require('@clerk/express');
+const { requireAuth, clerkMiddleware } = require('@clerk/express');
 const db = require('./database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'qr_parking_super_secret_5m_key';
@@ -11,6 +11,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'qr_parking_super_secret_5m_key';
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Clerk middleware must be applied before routes that use requireAuth()
+app.use(clerkMiddleware());
 
 // --- RATE LIMITERS ---
 const qrLimiter = rateLimit({
@@ -297,6 +299,12 @@ app.get('/api/events/recent', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
+});
+
+// JSON Error Handler for Express
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 // Detect the last event of a vehicle to guess if they are entering or exiting automatically
