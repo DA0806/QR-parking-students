@@ -1,6 +1,22 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// La IP de tu PC que vimos en los logs de Expo es 192.168.0.6
-const HOST = '192.168.0.6';
+const EXPO_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export const API_URL = `http://${HOST}:3000/api`;
+const getHost = () => {
+	if (EXPO_API_URL) {
+		return EXPO_API_URL;
+	}
+
+	if (Platform.OS === 'web') {
+		return 'http://localhost:3000/api';
+	}
+
+	// Expo Go / simulators can usually reach the machine over the packager host.
+	const hostUri = Constants.expoConfig?.hostUri;
+	const host = hostUri?.split(':')[0] ?? 'localhost';
+
+	return `http://${host}:3000/api`;
+};
+
+export const API_URL = getHost();
