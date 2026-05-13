@@ -66,7 +66,7 @@ app.post('/api/users/sync', validateUserSync, (req: Request, res: Response) => {
 
   // Use subquery to check existence and insert or do nothing, then return row.
   // Actually, we can use "INSERT ON CONFLICT" (SQLite 3.24+) but just doing a select first is easy.
-  db.get('SELECT * FROM Users WHERE clerk_id = ?', [clerk_id], (err, any, row: any) => {
+  db.get('SELECT * FROM Users WHERE clerk_id = ?', [clerk_id], (err: any, row: any) => {
     if (err) return res.status(500).json({ error: err.message });
     
     if (row) {
