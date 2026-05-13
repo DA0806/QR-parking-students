@@ -21,7 +21,7 @@ const tokenCache = {
       return item;
     } catch (error) {
       console.error('SecureStore get item error: ', error);
-      await SecureStore.deleteItemAsync(key);
+      // Don't delete on error, just return null
       return null;
     }
   },
@@ -29,6 +29,8 @@ const tokenCache = {
     try {
       return SecureStore.setItemAsync(key, value);
     } catch (err) {
+      console.error('SecureStore set item error: ', err);
+      // Continue even if storage fails
       return;
     }
   },
@@ -44,24 +46,40 @@ function RootNavigation() {
   // Sync user with our local Node.js backend when Clerk establishes session
   useEffect(() => {
     if (isSignedIn && clerkUser) {
-      fetch(`${API_URL}/users/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clerk_id: clerkUser.id,
-          email: clerkUser.primaryEmailAddress?.emailAddress,
-          name: clerkUser.fullName || clerkUser.firstName || 'Usuario',
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        setRole(data.role); // student, admin, superadmin
-      })
-      .catch((e) => {
+      const syncUser = async () => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+          const response = await fetch(`${API_URL}/users/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              clerk_id: clerkUser.id,
+              email: clerkUser.primaryEmailAddress?.emailAddress,
+              name: clerkUser.fullName || clerkUser.firstName || 'Usuario',
+            })
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            setRole(data.role); // student, admin, superadmin
+          } else {
+            console.error('Failed to sync user:', response.status);
+            // Set default role if sync fails
+            setRole('student');
+          }
+        } catch (e) {
           console.error("Fetch DB error: ", e);
-          // Si el servidor está caído, cerrar sesión para que no se atrape allí forever.
-          // signOut();
-      });
+          // Set default role if backend is unavailable
+          setRole('student');
+        }
+      };
+
+      syncUser();
     } else {
       setRole(null);
     }

@@ -48,7 +48,9 @@ export default function LoginScreen() {
       });
       await setActive({ session: completeSignIn.createdSessionId });
     } catch (err: any) {
-      Alert.alert('Error al ingresar', err.errors ? err.errors[0].message : err.message);
+      console.error('Sign in error:', err);
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Error al iniciar sesión';
+      Alert.alert('Error al ingresar', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +73,9 @@ export default function LoginScreen() {
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
     } catch (err: any) {
-      Alert.alert('Error de registro', err.errors ? err.errors[0].message : err.message);
+      console.error('Sign up error:', err);
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Error al registrarse';
+      Alert.alert('Error de registro', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +94,9 @@ export default function LoginScreen() {
       });
       await setSignUpActive({ session: completeSignUp.createdSessionId });
     } catch (err: any) {
-      Alert.alert('Código Inválido', err.errors ? err.errors[0].message : err.message);
+      console.error('Verification error:', err);
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Código inválido';
+      Alert.alert('Código Inválido', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +116,7 @@ export default function LoginScreen() {
         await setOAuthActive({ session: createdSessionId });
       }
     } catch (err) {
-      console.error(err);
+      console.error('Microsoft auth error:', err);
       Alert.alert('Autenticación cancelada o fallida');
     } finally {
       setIsLoading(false);
