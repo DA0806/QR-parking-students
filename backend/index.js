@@ -5,6 +5,15 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { requireAuth, clerkMiddleware } = require('@clerk/express');
 const db = require('./database');
+const {
+  validateUserSync,
+  validateVehicle,
+  validateZone,
+  validateZoneUpdate,
+  validateRoleUpdate,
+  validateScanEvent,
+  validateManualEvent
+} = require('./middleware/validation');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'qr_parking_super_secret_5m_key';
 
@@ -48,7 +57,7 @@ app.post('/api/qr/generate', qrLimiter, requireAuth(), (req, res) => {
 
 // --- USERS API ---
 // Called when a user logs in via Clerk. Upserts the user and returns their role.
-app.post('/api/users/sync', (req, res) => {
+app.post('/api/users/sync', validateUserSync, (req, res) => {
   const { clerk_id, email, name } = req.body;
   if (!clerk_id || !email || !name) {
     return res.status(400).json({ error: 'Missing user data' });
@@ -83,7 +92,7 @@ app.get('/api/users', (req, res) => {
   });
 });
 
-app.put('/api/users/:clerk_id/role', (req, res) => {
+app.put('/api/users/:clerk_id/role', validateRoleUpdate, (req, res) => {
   const { role } = req.body;
   db.run('UPDATE Users SET role = ? WHERE clerk_id = ?', [role, req.params.clerk_id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -122,7 +131,7 @@ app.get('/api/vehicles/:clerk_id', (req, res) => {
   });
 });
 
-app.post('/api/vehicles', (req, res) => {
+app.post('/api/vehicles', validateVehicle, (req, res) => {
   const { plate, owner_clerk_id, make, model } = req.body;
   db.run('INSERT INTO Vehicles (plate, owner_clerk_id, make, model) VALUES (?, ?, ?, ?)', 
     [plate.toUpperCase(), owner_clerk_id, make, model], function(err) {
@@ -146,7 +155,7 @@ app.get('/api/zones', (req, res) => {
   });
 });
 
-app.post('/api/zones', (req, res) => {
+app.post('/api/zones', validateZone, (req, res) => {
   const { name, total_capacity } = req.body;
   db.run('INSERT INTO Zones (name, total_capacity, current_occupancy) VALUES (?, ?, 0)', [name, total_capacity], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -154,7 +163,7 @@ app.post('/api/zones', (req, res) => {
   });
 });
 
-app.put('/api/zones/:id', (req, res) => {
+app.put('/api/zones/:id', validateZoneUpdate, (req, res) => {
   const { name, total_capacity } = req.body;
   db.run('UPDATE Zones SET name = ?, total_capacity = ? WHERE id = ?', [name, total_capacity, req.params.id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -170,7 +179,7 @@ app.delete('/api/zones/:id', (req, res) => {
 });
 
 // --- EVENTS API (Scanner) ---
-app.post('/api/events/scan', scanLimiter, requireAuth(), (req, res) => {
+app.post('/api/events/scan', scanLimiter, requireAuth(), validateScanEvent, (req, res) => {
     const { token, zone_id } = req.body;
     
     if (!token || !zone_id) return res.status(400).json({ error: 'Faltan datos del escaneo' });
@@ -260,7 +269,7 @@ app.get('/api/events/last/:plate', (req, res) => {
     });
 });
 
-app.post('/api/events', (req, res) => {
+app.post('/api/events', validateManualEvent, (req, res) => {
     const { vehicle_plate, zone_id, isEntry } = req.body;
     
     db.get('SELECT current_occupancy, total_capacity FROM Zones WHERE id = ?', [zone_id], (err, zone) => {
