@@ -1,7 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { API_URL } from '../../config/api';
+import { handleApiCall, getErrorMessage } from '../../utils/errorHandler';
+import LoadingSkeleton from '../../components/LoadingSkeleton';
 
 type Zone = {
   id: number;
@@ -13,6 +15,8 @@ type Zone = {
 export default function StudentZonesScreen() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchZones = async () => {
     try {
@@ -20,8 +24,13 @@ export default function StudentZonesScreen() {
       if (!response.ok) throw new Error('API Error');
       const data = await response.json();
       setZones(data);
+      setError(null);
     } catch (e) {
       console.error(e);
+      setError(getErrorMessage(e));
+      Alert.alert('Error', getErrorMessage(e));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,6 +45,10 @@ export default function StudentZonesScreen() {
     await fetchZones();
     setRefreshing(false);
   };
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
 
   const getPercentage = (occupancy: number, capacity: number) => {
     if (capacity === 0) return 0;
@@ -90,7 +103,14 @@ export default function StudentZonesScreen() {
         }}
         ListEmptyComponent={
           <View className="py-10 items-center">
-            <Text className="text-slate-500">Cargando disponibilidad...</Text>
+            {error ? (
+              <>
+                <Text className="text-red-400 mb-2">Error al cargar datos</Text>
+                <Text className="text-slate-500 text-sm">{error}</Text>
+              </>
+            ) : (
+              <Text className="text-slate-500">Cargando disponibilidad...</Text>
+            )}
           </View>
         }
       />
