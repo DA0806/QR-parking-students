@@ -74,9 +74,54 @@ npm start -- -c
 Dado que Clerk maneja la seguridad, cualquier cuenta nueva creada (Correo o Microsoft) ingresará como `student` por defecto. 
 
 **Para testear el panel de `superadmin` por primera vez:**
+
+**Opción 1: Usar el script de seed (Recomendado)**
+```bash
+npm run seed:superadmin <email>
+```
+
+**Opción 2: Manual**
 1. Crea tu cuenta en la app y accede al panel de estudiante.
 2. Abre tu explorador de Bases de Datos favorito (Ej. SQLite Browser).
 3. Entra a `backend/keyalumnos.db`.
 4. En la tabla `Users`, localiza tu usuario y cambia la columna `role` a `superadmin`.
 5. Guarda la DB, y refresca tu app móvil (Reiniciar Metro Bundle).
 A partir de ahí, obtendrás el control absoluto y podrás convertir a otras cuentas en Guardias directamente desde la app.
+
+---
+
+### 🧪 Testing
+
+El proyecto incluye pruebas unitares configuradas con Jest:
+
+```bash
+# Ejecutar todas las pruebas
+npm test
+
+# Ejecutar pruebas en modo watch
+npm run test:watch
+
+# Ejecutar pruebas con cobertura
+npm run test:coverage
+```
+
+---
+
+### 🔧 Scripts Disponibles
+
+```bash
+# Desarrollo
+npm start              # Iniciar el servidor de desarrollo
+npm run android        # Iniciar en Android
+npm run ios            # Iniciar en iOS
+npm run web            # Iniciar en web
+
+# Calidad de código
+npm run lint           # Ejecutar ESLint
+npm test              # Ejecutar pruebas
+npm run test:watch    # Ejecutar pruebas en modo watch
+npm run test:coverage # Ejecutar pruebas con cobertura
+
+# Utilidades
+npm run seed:superadmin <email>  # Promover usuario a superadmin
+```
